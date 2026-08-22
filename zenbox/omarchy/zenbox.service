@@ -1,0 +1,17 @@
+[Unit]
+Description=ZenBox local inbox server
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.local/share/zenbox/app/zenbox-server.py
+WorkingDirectory=%h/.local/share/zenbox/app
+Environment=ZENBOX_DATA=%h/.local/share/zenbox
+Environment=ZENBOX_HOST=127.0.0.1
+Environment=ZENBOX_PORT=8765
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

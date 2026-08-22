@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Launch or focus ZenBox as an Omarchy web app.
+set -euo pipefail
+
+PORT="${ZENBOX_PORT:-8765}"
+HOST="${ZENBOX_HOST:-127.0.0.1}"
+URL="http://${HOST}:${PORT}"
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "${SOURCE}" ]]; do
+  SOURCE="$(readlink -f "${SOURCE}")"
+done
+HERE="$(cd "$(dirname "${SOURCE}")/.." && pwd)"
+if [[ -x "${HOME}/.local/share/zenbox/app/zenbox-server.py" ]]; then
+  HERE="${HOME}/.local/share/zenbox/app"
+fi
+SERVER="${HERE}/zenbox-server.py"
+ADD="${1:-}"
+
+start_server() {
+  if curl -sf "${URL}/api/health" >/dev/null; then
+    return 0
+  fi
+  if command -v systemctl >/dev/null && systemctl --user is-enabled zenbox.service >/dev/null 2>&1; then
+    systemctl --user start zenbox.service || true
+  fi
+  if ! curl -sf "${URL}/api/health" >/dev/null; then
+    mkdir -p "${HOME}/.local/share/zenbox"
+    nohup python3 "${SERVER}" >>"${HOME}/.local/share/zenbox/zenbox.log" 2>&1 &
+  fi
+  for _ in $(seq 1 30); do
+    curl -sf "${URL}/api/health" >/dev/null && return 0
+    sleep 0.15
+  done
+  echo "ZenBox server failed to start on ${URL}" >&2
+  exit 1
+}
+
+start_server
+
+TARGET="${URL}/?native=1"
+if [[ "${ADD}" == "add" || "${ADD}" == "--add" ]]; then
+  TARGET="${URL}/?native=1&add=1"
+fi
+
+if command -v omarchy-launch-or-focus-webapp >/dev/null; then
+  exec omarchy-launch-or-focus-webapp "Inbox|ZenBox|zenbox" "${TARGET}" --class=zenbox --name=zenbox
+fi
+if command -v omarchy-launch-webapp >/dev/null; then
+  exec omarchy-launch-webapp "${TARGET}" --class=zenbox --name=zenbox
+fi
+
+browser="$(command -v chromium || command -v google-chrome-stable || command -v google-chrome || true)"
+if [[ -n "${browser}" ]]; then
+  exec "${browser}" --app="${TARGET}" --class=zenbox --name=zenbox
+fi
+
+xdg-open "${TARGET}"
